@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 class CurriculumManager:
     """Provides curriculum lookups for adaptive background targeting."""
 
     def __init__(self) -> None:
-        self._curriculum: Dict[str, Dict[str, Dict[str, List[str] | str]]] = {
+        self._curriculum: Dict[str, Dict[str, Any]] = {
             "Plant Scientist": {
                 "description": "Diagnoses crop physiology and nutrient transport issues.",
                 "modules": {
@@ -145,7 +145,7 @@ class CurriculumManager:
         modules = role_data.get("modules", {})
         return list(modules.get(module_name, []))
 
-    def get_all_curriculum(self) -> Dict[str, Dict[str, Dict[str, List[str] | str]]]:
+    def get_all_curriculum(self) -> Dict[str, Dict[str, Any]]:
         return self._curriculum
 
     def resolve_target(
@@ -155,7 +155,7 @@ class CurriculumManager:
     ) -> Dict[str, str]:
         """Resolve best matching role/module/concept for adaptive targeting."""
         valid_role = role_name if role_name in self._curriculum else self.get_roles()[0]
-        modules = self._curriculum[valid_role]["modules"]  # type: ignore[index]
+        modules: Dict[str, List[str]] = self._curriculum[valid_role]["modules"]
 
         if concept_hint:
             normalized_hint = concept_hint.lower().strip()

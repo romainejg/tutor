@@ -17,6 +17,47 @@ from core.tutor import Tutor
 
 st.set_page_config(page_title="CEA Learning App", page_icon="🌱", layout="wide")
 
+DYNAMIC_ROLE_LABEL = "Cross-Functional / Dynamic"
+
+
+def build_practice_payload(
+    curriculum: CurriculumManager,
+    db: DatabaseManager,
+    adaptive_engine: AdaptiveEngine,
+    selected_role: str,
+    selected_difficulty: str,
+    use_adaptive_target: bool,
+) -> dict:
+    preferred_role = selected_role if selected_role in curriculum.get_roles() else None
+    recent_history = db.get_recent_performance(limit=6)
+    scenario_mode = "next_practice" if use_adaptive_target else "guided"
+
+    if selected_role == DYNAMIC_ROLE_LABEL:
+        scenario_mode = "surprise_me"
+
+    if use_adaptive_target or selected_role == DYNAMIC_ROLE_LABEL:
+        target = adaptive_engine.recommend_next_practice_target(preferred_role=preferred_role)
+    else:
+        role_weak = db.get_concept_mastery(limit=1, role_name=preferred_role) if preferred_role else []
+        concept_hint = role_weak[0]["concept_name"] if role_weak else None
+        target = {
+            **adaptive_engine.resolve_curriculum_target(preferred_role, concept_hint),
+            "recent_history": recent_history,
+        }
+
+    target_role = target.get("role_name", preferred_role or curriculum.get_roles()[0])
+    weak_for_role = [c["concept_name"] for c in db.get_concept_mastery(limit=5, role_name=target_role)]
+
+    return {
+        "role": target_role,
+        "module": target.get("module_name", "Adaptive target"),
+        "difficulty": selected_difficulty,
+        "target_concept": target.get("concept_name"),
+        "historical_weak_concepts": weak_for_role,
+        "recent_history": target.get("recent_history", recent_history),
+        "scenario_mode": scenario_mode,
+    }
+
 
 @st.cache_resource
 def build_services() -> dict:
@@ -81,40 +122,9 @@ if page == "Dashboard":
 
 elif page == "Practice":
     st.title("Practice")
-    roles = curriculum.get_roles() + ["Cross-Functional / Dynamic"]
+    roles = curriculum.get_roles() + [DYNAMIC_ROLE_LABEL]
     selected_role = st.selectbox("Role", roles)
     selected_difficulty = st.selectbox("Difficulty", ["Beginner", "Intermediate", "Advanced"])
-
-    def _build_scenario_payload(use_adaptive_target: bool) -> dict:
-        preferred_role = selected_role if selected_role in curriculum.get_roles() else None
-        recent_history = db.get_recent_performance(limit=6)
-        scenario_mode = "next_practice" if use_adaptive_target else "guided"
-
-        if selected_role == "Cross-Functional / Dynamic":
-            scenario_mode = "surprise_me"
-
-        if use_adaptive_target or selected_role == "Cross-Functional / Dynamic":
-            target = adaptive_engine.recommend_next_practice_target(preferred_role=preferred_role)
-        else:
-            role_weak = db.get_concept_mastery(limit=1, role_name=preferred_role) if preferred_role else []
-            concept_hint = role_weak[0]["concept_name"] if role_weak else None
-            target = {
-                **adaptive_engine.resolve_curriculum_target(preferred_role, concept_hint),
-                "recent_history": recent_history,
-            }
-
-        target_role = target.get("role_name", preferred_role or curriculum.get_roles()[0])
-        weak_for_role = [c["concept_name"] for c in db.get_concept_mastery(limit=5, role_name=target_role)]
-
-        return {
-            "role": target_role,
-            "module": target.get("module_name", "Adaptive target"),
-            "difficulty": selected_difficulty,
-            "target_concept": target.get("concept_name"),
-            "historical_weak_concepts": weak_for_role,
-            "recent_history": target.get("recent_history", recent_history),
-            "scenario_mode": scenario_mode,
-        }
 
     col_generate, col_next = st.columns(2)
     generate_clicked = col_generate.button("Generate Scenario", type="primary")
@@ -122,7 +132,14 @@ elif page == "Practice":
 
     if generate_clicked or next_clicked:
         with st.spinner("Generating scenario..."):
-            scenario_payload = _build_scenario_payload(use_adaptive_target=next_clicked)
+            scenario_payload = build_practice_payload(
+                curriculum=curriculum,
+                db=db,
+                adaptive_engine=adaptive_engine,
+                selected_role=selected_role,
+                selected_difficulty=selected_difficulty,
+                use_adaptive_target=next_clicked,
+            )
             scenario = learning_session.generate_scenario(scenario_payload)
             st.success(f"Scenario generated: {scenario.title}")
 
