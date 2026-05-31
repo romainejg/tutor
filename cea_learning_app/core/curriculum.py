@@ -161,9 +161,12 @@ class CurriculumManager:
             normalized_hint = concept_hint.lower().strip()
             for module_name, concepts in modules.items():
                 for concept in concepts:
-                    normalized_concept = concept.lower()
-                    if normalized_hint == normalized_concept:
+                    if normalized_hint == concept.lower():
                         return {"role_name": valid_role, "module_name": module_name, "concept_name": concept}
+
+            for module_name, concepts in modules.items():
+                for concept in concepts:
+                    normalized_concept = concept.lower()
                     if normalized_hint in normalized_concept or normalized_concept in normalized_hint:
                         return {"role_name": valid_role, "module_name": module_name, "concept_name": concept}
 

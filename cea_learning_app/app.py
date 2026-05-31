@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from config import AVAILABLE_MODELS, get_default_model_label, get_model_id, is_mock_mode
+from config import AVAILABLE_MODELS, get_model_id, get_model_label, is_mock_mode
 from core.adaptive_engine import AdaptiveEngine
 from core.curriculum import CurriculumManager
 from core.database import DatabaseManager
@@ -63,7 +63,7 @@ def build_practice_payload(
 def build_services() -> dict:
     curriculum = CurriculumManager()
     db = DatabaseManager()
-    selected_label = st.session_state.get("selected_model_label", get_default_model_label())
+    selected_label = get_model_label(st.session_state.get("selected_model_label"))
     model = get_model_id(selected_label)
     openai_service = OpenAIService(model=model)
     scenario_generator = ScenarioGenerator(openai_service)
@@ -251,9 +251,7 @@ elif page == "Settings":
     else:
         st.success("Running with OpenAI API streaming enabled.")
 
-    default_label = st.session_state.get("selected_model_label", get_default_model_label())
-    if default_label not in AVAILABLE_MODELS:
-        default_label = get_default_model_label()
+    default_label = get_model_label(st.session_state.get("selected_model_label"))
     selected_model_label = st.selectbox(
         "Model",
         options=list(AVAILABLE_MODELS.keys()),

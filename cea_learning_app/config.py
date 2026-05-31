@@ -48,3 +48,10 @@ def get_default_model_label() -> str:
         if model_id == DEFAULT_MODEL:
             return label
     return next(iter(AVAILABLE_MODELS))
+
+
+def get_model_label(selected_label: Optional[str]) -> str:
+    """Resolve model label with fallback to default display option."""
+    if selected_label and selected_label in AVAILABLE_MODELS:
+        return selected_label
+    return get_default_model_label()
