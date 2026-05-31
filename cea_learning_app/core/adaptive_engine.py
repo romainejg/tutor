@@ -12,6 +12,8 @@ from core.models import Evaluation, Scenario
 class AdaptiveEngine:
     """Simple MVP adaptive engine for concept mastery."""
 
+    MAX_RECENT_SCORES_FOR_RECOMMENDATION = 5
+
     def __init__(self, database: DatabaseManager, curriculum: CurriculumManager) -> None:
         self.database = database
         self.curriculum = curriculum
@@ -86,7 +88,10 @@ class AdaptiveEngine:
                     "concept_name": row["concept_name"],
                     "reason": "Focused on weakest role-specific concept from recent performance.",
                     "recent_history": self.database.get_recent_scores_for_concept(
-                        row["role_name"], row["module_name"], row["concept_name"], limit=5
+                        row["role_name"],
+                        row["module_name"],
+                        row["concept_name"],
+                        limit=self.MAX_RECENT_SCORES_FOR_RECOMMENDATION,
                     ),
                 }
 
@@ -99,7 +104,10 @@ class AdaptiveEngine:
                 "concept_name": row["concept_name"],
                 "reason": "Prioritized lowest-mastery concept across recent history.",
                 "recent_history": self.database.get_recent_scores_for_concept(
-                    row["role_name"], row["module_name"], row["concept_name"], limit=5
+                    row["role_name"],
+                    row["module_name"],
+                    row["concept_name"],
+                    limit=self.MAX_RECENT_SCORES_FOR_RECOMMENDATION,
                 ),
             }
 

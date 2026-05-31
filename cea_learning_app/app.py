@@ -18,6 +18,8 @@ from core.tutor import Tutor
 st.set_page_config(page_title="CEA Learning App", page_icon="🌱", layout="wide")
 
 DYNAMIC_ROLE_LABEL = "Cross-Functional / Dynamic"
+MAX_RECENT_PERFORMANCE_SAMPLES = 6
+MAX_WEAK_CONCEPTS_TO_INCLUDE = 5
 
 
 def build_practice_payload(
@@ -29,7 +31,7 @@ def build_practice_payload(
     use_adaptive_target: bool,
 ) -> dict:
     preferred_role = selected_role if selected_role in curriculum.get_roles() else None
-    recent_history = db.get_recent_performance(limit=6)
+    recent_history = db.get_recent_performance(limit=MAX_RECENT_PERFORMANCE_SAMPLES)
     scenario_mode = "next_practice" if use_adaptive_target else "guided"
 
     if selected_role == DYNAMIC_ROLE_LABEL:
@@ -46,7 +48,9 @@ def build_practice_payload(
         }
 
     target_role = target.get("role_name", preferred_role or curriculum.get_roles()[0])
-    weak_for_role = [c["concept_name"] for c in db.get_concept_mastery(limit=5, role_name=target_role)]
+    weak_for_role = [
+        c["concept_name"] for c in db.get_concept_mastery(limit=MAX_WEAK_CONCEPTS_TO_INCLUDE, role_name=target_role)
+    ]
 
     return {
         "role": target_role,

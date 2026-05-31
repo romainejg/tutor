@@ -12,7 +12,7 @@ import streamlit as st
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
-DATABASE_PATH = BASE_DIR / "data" / "app.db"
+DATABASE_PATH = Path(os.getenv("DATABASE_PATH", str(BASE_DIR / "data" / "app.db")))
 DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 AVAILABLE_MODELS = {
