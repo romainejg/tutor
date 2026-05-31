@@ -34,7 +34,15 @@ User response:
 {user_response}
 
 Scoring guidance:
-- Reward practical reasoning, explicit diagnostics, and tradeoff awareness.
-- Penalize unsupported assumptions, overconfidence, and missed diagnostic uncertainty.
+- Reward responses that:
+  - Ask for missing telemetry before committing to major decisions.
+  - Use step-by-step diagnostic loops that separate symptoms from root causes.
+  - Validate assumptions before irreversible operational changes.
+  - Weigh crop quality, operational cost, labor demand, and risk tradeoffs.
+- Penalize responses that:
+  - Jump too quickly to single-factor explanations.
+  - Ignore conflicting telemetry or data uncertainty.
+  - Recommend major changes without validation checks.
+  - Fail to request missing information in ambiguous scenarios.
 - Keep feedback concise and professional.
 """.strip()
