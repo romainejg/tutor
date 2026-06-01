@@ -7,34 +7,51 @@ from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
+import streamlit as st
 
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
-DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gpt-4o-mini")
-DATABASE_PATH = os.getenv("DATABASE_PATH", str(BASE_DIR / "data" / "app.db"))
+DATABASE_PATH = Path(os.getenv("DATABASE_PATH", str(BASE_DIR / "data" / "app.db")))
+DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+AVAILABLE_MODELS = {
+    "GPT-4o Mini (Cost-Efficient)": "gpt-4o-mini",
+    "GPT-4o (High Performance Reasoning)": "gpt-4o",
+    "o1-Mini (Advanced Logical Planning)": "o1-mini",
+}
+
+DEFAULT_MODEL = "gpt-4o-mini"
 
 
-def get_api_key() -> Optional[str]:
-    """Return OpenAI API key from env first, then Streamlit secrets if available."""
-    env_key = os.getenv("OPENAI_API_KEY")
-    if env_key:
-        return env_key
-
-    try:
-        import streamlit as st
-
-        secret_key = st.secrets.get("OPENAI_API_KEY")
-        if secret_key:
-            return str(secret_key)
-    except Exception:
-        return None
-    return None
+def get_api_key() -> str:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key and "OPENAI_API_KEY" in st.secrets:
+        api_key = st.secrets["OPENAI_API_KEY"]
+    return api_key or ""
 
 
 def is_mock_mode() -> bool:
-    """Enable deterministic mock mode whenever key is unavailable."""
-    return get_api_key() is None
+    return get_api_key() == ""
 
 
-MOCK_MODE = is_mock_mode()
+def get_model_id(selected_label: Optional[str]) -> str:
+    """Resolve selected model label to API model id with safe fallback."""
+    if selected_label and selected_label in AVAILABLE_MODELS:
+        return AVAILABLE_MODELS[selected_label]
+    return DEFAULT_MODEL
+
+
+def get_default_model_label() -> str:
+    """Return display label for DEFAULT_MODEL or first available option."""
+    for label, model_id in AVAILABLE_MODELS.items():
+        if model_id == DEFAULT_MODEL:
+            return label
+    return next(iter(AVAILABLE_MODELS))
+
+
+def get_model_label(selected_label: Optional[str]) -> str:
+    """Resolve model label with fallback to default display option."""
+    if selected_label and selected_label in AVAILABLE_MODELS:
+        return selected_label
+    return get_default_model_label()

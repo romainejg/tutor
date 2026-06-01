@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict
+from typing import Any, Dict, Optional
 
 from core.curriculum import CurriculumManager
 from core.database import DatabaseManager
@@ -11,6 +11,8 @@ from core.models import Evaluation, Scenario
 
 class AdaptiveEngine:
     """Simple MVP adaptive engine for concept mastery."""
+
+    MAX_RECENT_SCORES_FOR_RECOMMENDATION = 5
 
     def __init__(self, database: DatabaseManager, curriculum: CurriculumManager) -> None:
         self.database = database
@@ -71,3 +73,61 @@ class AdaptiveEngine:
 
         self.database.save_daily_recommendation(**recommendation)
         return recommendation
+
+    def recommend_next_practice_target(self, preferred_role: Optional[str] = None) -> Dict[str, Any]:
+        """Select the next best role/module/concept target from recent performance."""
+        role_name = preferred_role if preferred_role in self.curriculum.get_roles() else None
+
+        if role_name:
+            weak_for_role = self.database.get_concept_mastery(limit=1, role_name=role_name)
+            if weak_for_role:
+                row = weak_for_role[0]
+                return {
+                    "role_name": row["role_name"],
+                    "module_name": row["module_name"],
+                    "concept_name": row["concept_name"],
+                    "reason": "Focused on weakest role-specific concept from recent performance.",
+                    "recent_history": self.database.get_recent_scores_for_concept(
+                        row["role_name"],
+                        row["module_name"],
+                        row["concept_name"],
+                        limit=self.MAX_RECENT_SCORES_FOR_RECOMMENDATION,
+                    ),
+                }
+
+        weak_global = self.database.get_weak_concepts(limit=1)
+        if weak_global:
+            row = weak_global[0]
+            return {
+                "role_name": row["role_name"],
+                "module_name": row["module_name"],
+                "concept_name": row["concept_name"],
+                "reason": "Prioritized lowest-mastery concept across recent history.",
+                "recent_history": self.database.get_recent_scores_for_concept(
+                    row["role_name"],
+                    row["module_name"],
+                    row["concept_name"],
+                    limit=self.MAX_RECENT_SCORES_FOR_RECOMMENDATION,
+                ),
+            }
+
+        recent_performance = self.database.get_recent_performance(limit=1)
+        if recent_performance:
+            recent = recent_performance[0]
+            resolved = self.curriculum.resolve_target(role_name=recent["role_name"], concept_hint=None)
+            return {
+                **resolved,
+                "reason": "Balanced continuation from most recent role activity.",
+                "recent_history": recent_performance,
+            }
+
+        baseline = self.curriculum.resolve_target(role_name=role_name, concept_hint=None)
+        return {
+            **baseline,
+            "reason": "Initialized baseline target due to limited learner history.",
+            "recent_history": [],
+        }
+
+    def resolve_curriculum_target(self, role_name: Optional[str], concept_hint: Optional[str]) -> Dict[str, str]:
+        """Resolve curriculum mapping for optional adaptive concept hints."""
+        return self.curriculum.resolve_target(role_name=role_name, concept_hint=concept_hint)

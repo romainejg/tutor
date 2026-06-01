@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from config import DEFAULT_MODEL
+from config import AVAILABLE_MODELS, get_model_id, get_model_label, is_mock_mode
 from core.adaptive_engine import AdaptiveEngine
 from core.curriculum import CurriculumManager
 from core.database import DatabaseManager
@@ -17,12 +17,58 @@ from core.tutor import Tutor
 
 st.set_page_config(page_title="CEA Learning App", page_icon="🌱", layout="wide")
 
+DYNAMIC_ROLE_LABEL = "Cross-Functional / Dynamic"
+MAX_RECENT_PERFORMANCE_SAMPLES = 6
+MAX_WEAK_CONCEPTS_TO_INCLUDE = 5
+
+
+def build_practice_payload(
+    curriculum: CurriculumManager,
+    db: DatabaseManager,
+    adaptive_engine: AdaptiveEngine,
+    selected_role: str,
+    selected_difficulty: str,
+    use_adaptive_target: bool,
+) -> dict:
+    preferred_role = selected_role if selected_role in curriculum.get_roles() else None
+    recent_history = db.get_recent_performance(limit=MAX_RECENT_PERFORMANCE_SAMPLES)
+    scenario_mode = "next_practice" if use_adaptive_target else "guided"
+
+    if selected_role == DYNAMIC_ROLE_LABEL:
+        scenario_mode = "surprise_me"
+
+    if use_adaptive_target or selected_role == DYNAMIC_ROLE_LABEL:
+        target = adaptive_engine.recommend_next_practice_target(preferred_role=preferred_role)
+    else:
+        role_weak = db.get_concept_mastery(limit=1, role_name=preferred_role) if preferred_role else []
+        concept_hint = role_weak[0]["concept_name"] if role_weak else None
+        target = {
+            **adaptive_engine.resolve_curriculum_target(preferred_role, concept_hint),
+            "recent_history": recent_history,
+        }
+
+    target_role = target.get("role_name", preferred_role or curriculum.get_roles()[0])
+    weak_for_role = [
+        c["concept_name"] for c in db.get_concept_mastery(limit=MAX_WEAK_CONCEPTS_TO_INCLUDE, role_name=target_role)
+    ]
+
+    return {
+        "role": target_role,
+        "module": target.get("module_name", "Adaptive target"),
+        "difficulty": selected_difficulty,
+        "target_concept": target.get("concept_name"),
+        "historical_weak_concepts": weak_for_role,
+        "recent_history": target.get("recent_history", recent_history),
+        "scenario_mode": scenario_mode,
+    }
+
 
 @st.cache_resource
 def build_services() -> dict:
     curriculum = CurriculumManager()
     db = DatabaseManager()
-    model = st.session_state.get("model_override", DEFAULT_MODEL)
+    selected_label = get_model_label(st.session_state.get("selected_model_label"))
+    model = get_model_id(selected_label)
     openai_service = OpenAIService(model=model)
     scenario_generator = ScenarioGenerator(openai_service)
     evaluator = ResponseEvaluator(openai_service)
@@ -80,25 +126,25 @@ if page == "Dashboard":
 
 elif page == "Practice":
     st.title("Practice")
-    roles = curriculum.get_roles()
+    roles = curriculum.get_roles() + [DYNAMIC_ROLE_LABEL]
     selected_role = st.selectbox("Role", roles)
-    modules = curriculum.get_modules_by_role(selected_role)
-    selected_module = st.selectbox("Module", modules)
-    concepts = curriculum.get_concepts_by_module(selected_role, selected_module)
-    selected_concept = st.selectbox("Concept", concepts)
     selected_difficulty = st.selectbox("Difficulty", ["Beginner", "Intermediate", "Advanced"])
 
-    weak_for_role = [c["concept_name"] for c in db.get_concept_mastery(limit=5, role_name=selected_role)]
+    col_generate, col_next = st.columns(2)
+    generate_clicked = col_generate.button("Generate Scenario", type="primary")
+    next_clicked = col_next.button("Generate Next Practice Scenario")
 
-    if st.button("Generate Scenario", type="primary"):
+    if generate_clicked or next_clicked:
         with st.spinner("Generating scenario..."):
-            scenario = learning_session.generate_scenario(
-                selected_role,
-                selected_module,
-                selected_concept,
-                selected_difficulty,
-                weak_for_role,
+            scenario_payload = build_practice_payload(
+                curriculum=curriculum,
+                db=db,
+                adaptive_engine=adaptive_engine,
+                selected_role=selected_role,
+                selected_difficulty=selected_difficulty,
+                use_adaptive_target=next_clicked,
             )
+            scenario = learning_session.generate_scenario(scenario_payload)
             st.success(f"Scenario generated: {scenario.title}")
 
     scenario = st.session_state.get("current_scenario")
@@ -204,14 +250,22 @@ elif page == "Curriculum":
 elif page == "Settings":
     st.title("Settings")
     st.subheader("API Status")
-    st.write("Connection:", "Mock Mode" if openai_service.mock_mode else "Live OpenAI")
-    st.write("Mock Mode:", openai_service.mock_mode)
+    if is_mock_mode():
+        st.warning("Running in local mock fallback mode.")
+    else:
+        st.success("Running with OpenAI API streaming enabled.")
 
-    selected_model = st.text_input("Model name", value=st.session_state.get("model_override", DEFAULT_MODEL))
+    default_label = get_model_label(st.session_state.get("selected_model_label"))
+    selected_model_label = st.selectbox(
+        "Model",
+        options=list(AVAILABLE_MODELS.keys()),
+        index=list(AVAILABLE_MODELS.keys()).index(default_label),
+    )
     if st.button("Apply Model"):
-        st.session_state.model_override = selected_model
-        openai_service.set_model(selected_model)
-        st.success(f"Model updated to {selected_model}")
+        st.session_state.selected_model_label = selected_model_label
+        selected_model_id = get_model_id(selected_model_label)
+        openai_service.set_model(selected_model_id)
+        st.success(f"Model updated to {selected_model_label} ({selected_model_id})")
 
     st.subheader("Reset Database")
     confirm = st.checkbox("I understand this will permanently delete local learning history.")

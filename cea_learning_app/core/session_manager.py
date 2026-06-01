@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 import streamlit as st
 
@@ -47,13 +47,9 @@ class LearningSession:
 
     def generate_scenario(
         self,
-        role: str,
-        module: str,
-        concept: str,
-        difficulty: str,
-        historical_weak_concepts: list[str],
+        payload: dict[str, Any],
     ) -> Scenario:
-        scenario = self.scenario_generator.generate(role, module, concept, difficulty, historical_weak_concepts)
+        scenario = self.scenario_generator.generate(payload)
         scenario_id = self.db.save_scenario(scenario)
         st.session_state.current_scenario = scenario
         st.session_state.current_scenario_id = scenario_id

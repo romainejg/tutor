@@ -16,7 +16,7 @@ class OpenAIService:
     def __init__(self, model: Optional[str] = None) -> None:
         self.model = model or DEFAULT_MODEL
         self.api_key = get_api_key()
-        self.mock_mode = self.api_key is None
+        self.mock_mode = not bool(self.api_key)
         self.client = OpenAI(api_key=self.api_key) if not self.mock_mode else None
 
     def set_model(self, model_name: str) -> None:
